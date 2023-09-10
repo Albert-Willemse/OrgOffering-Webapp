@@ -1,28 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using OrgOffering.Data;
 using OrgOffering.Models;
+using OrgOffering.Repository;
 
 namespace OrgOffering.Controllers
 {
     public class ProductsController : Controller
     {
-        private readonly OrgOfferingDBContext _context;
+        private readonly IProductRepository _productRepository;
 
-        public ProductsController(OrgOfferingDBContext context)
+        public ProductsController(IProductRepository productRepository)
         {
-            _context = context;
+            _productRepository = productRepository;
         }
 
         // GET: Products
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Product.ToListAsync());
+            var results = _productRepository.GetAll();
+
+            return View(results);
         }
 
         // GET: Products/Details/5
@@ -33,8 +36,10 @@ namespace OrgOffering.Controllers
                 return NotFound();
             }
 
-            var product = await _context.Product
-                .FirstOrDefaultAsync(m => m.ProductId == id);
+
+
+            var product = _productRepository.GetById(id);
+
             if (product == null)
             {
                 return NotFound();
@@ -58,9 +63,17 @@ namespace OrgOffering.Controllers
         {
             if (ModelState.IsValid)
             {
-                product.ProductId = Guid.NewGuid();
-                _context.Add(product);
-                await _context.SaveChangesAsync();
+                Product existingProduct;
+                do
+                {
+                    product.ProductId = Guid.NewGuid();
+                    existingProduct = _productRepository.GetById(product.ProductId);
+                }
+                while (existingProduct != null);
+                product.CreatedDate = DateTime.Now;
+
+                _productRepository.Add(product);
+                _productRepository.SaveChanges();
                 return RedirectToAction(nameof(Index));
             }
             return View(product);
@@ -74,7 +87,7 @@ namespace OrgOffering.Controllers
                 return NotFound();
             }
 
-            var product = await _context.Product.FindAsync(id);
+            var product = _productRepository.GetById(id);
             if (product == null)
             {
                 return NotFound();
@@ -98,8 +111,8 @@ namespace OrgOffering.Controllers
             {
                 try
                 {
-                    _context.Update(product);
-                    await _context.SaveChangesAsync();
+                    _productRepository.Update(product);
+                    _productRepository.SaveChanges();
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -125,8 +138,7 @@ namespace OrgOffering.Controllers
                 return NotFound();
             }
 
-            var product = await _context.Product
-                .FirstOrDefaultAsync(m => m.ProductId == id);
+            var product = _productRepository.GetById(id);
             if (product == null)
             {
                 return NotFound();
@@ -140,15 +152,25 @@ namespace OrgOffering.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
-            var product = await _context.Product.FindAsync(id);
-            _context.Product.Remove(product);
-            await _context.SaveChangesAsync();
+            var product = _productRepository.GetById(id);
+            _productRepository.Remove(product);
+            _productRepository.SaveChanges();
             return RedirectToAction(nameof(Index));
         }
 
-        private bool ProductExists(Guid id)
+        private bool ProductExists(Guid? id)
         {
-            return _context.Product.Any(e => e.ProductId == id);
+            if (id == null)
+            {
+                return false; // Handle the case when id is null (product doesn't exist)
+            }
+
+            // Create an expression to filter products by their ID
+            Expression<Func<Product, bool>> filter = product => product.ProductId == id;
+
+            // Use the filter expression in your repository's Find method
+            return _productRepository.Find(filter).Any();
         }
+
     }
 }

@@ -1,28 +1,33 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using OrgOffering.Data;
 using OrgOffering.Models;
+using OrgOffering.Repository;
 
 namespace OrgOffering.Controllers
 {
     public class ServicesController : Controller
     {
-        private readonly OrgOfferingDBContext _context;
+        private readonly IServiceRepository _serviceRepository;
 
-        public ServicesController(OrgOfferingDBContext context)
+
+        public ServicesController(IServiceRepository serviceRepository)
         {
-            _context = context;
+            _serviceRepository = serviceRepository;
         }
 
         // GET: Services
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Service.ToListAsync());
+            var results = _serviceRepository.GetAll();
+
+            return View(results);
         }
 
         // GET: Services/Details/5
@@ -33,8 +38,10 @@ namespace OrgOffering.Controllers
                 return NotFound();
             }
 
-            var service = await _context.Service
-                .FirstOrDefaultAsync(m => m.ServiceId == id);
+            
+
+            var service = _serviceRepository.GetById(id);
+
             if (service == null)
             {
                 return NotFound();
@@ -58,9 +65,17 @@ namespace OrgOffering.Controllers
         {
             if (ModelState.IsValid)
             {
-                service.ServiceId = Guid.NewGuid();
-                _context.Add(service);
-                await _context.SaveChangesAsync();
+                Service existingService;
+                do
+                {
+                    service.ServiceId = Guid.NewGuid();
+                    existingService = _serviceRepository.GetById(service.ServiceId);
+                }
+                while (existingService != null);
+                service.CreatedDate = DateTime.Now;
+
+                _serviceRepository.Add(service);
+                _serviceRepository.SaveChanges();
                 return RedirectToAction(nameof(Index));
             }
             return View(service);
@@ -74,7 +89,7 @@ namespace OrgOffering.Controllers
                 return NotFound();
             }
 
-            var service = await _context.Service.FindAsync(id);
+            var service = _serviceRepository.GetById(id);
             if (service == null)
             {
                 return NotFound();
@@ -98,8 +113,8 @@ namespace OrgOffering.Controllers
             {
                 try
                 {
-                    _context.Update(service);
-                    await _context.SaveChangesAsync();
+                    _serviceRepository.Update(service);
+                    _serviceRepository.SaveChanges();
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -125,8 +140,7 @@ namespace OrgOffering.Controllers
                 return NotFound();
             }
 
-            var service = await _context.Service
-                .FirstOrDefaultAsync(m => m.ServiceId == id);
+            var service = _serviceRepository.GetById(id);
             if (service == null)
             {
                 return NotFound();
@@ -140,15 +154,25 @@ namespace OrgOffering.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
-            var service = await _context.Service.FindAsync(id);
-            _context.Service.Remove(service);
-            await _context.SaveChangesAsync();
+            var service = _serviceRepository.GetById(id);
+            _serviceRepository.Remove(service);
+            _serviceRepository.SaveChanges();
             return RedirectToAction(nameof(Index));
         }
 
-        private bool ServiceExists(Guid id)
+        private bool ServiceExists(Guid? id)
         {
-            return _context.Service.Any(e => e.ServiceId == id);
+            if (id == null)
+            {
+                return false; // Handle the case when id is null (service doesn't exist)
+            }
+
+            // Create an expression to filter services by their ID
+            Expression<Func<Service, bool>> filter = service => service.ServiceId == id;
+
+            // Use the filter expression in your repository's Find method
+            return _serviceRepository.Find(filter).Any();
         }
+
     }
 }
