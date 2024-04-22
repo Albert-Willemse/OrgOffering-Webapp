@@ -3,7 +3,7 @@ _In this instance, we'll work with a scenario featuring two tables: Product and 
 
 ## Link to webapp
 
-[OrgOfferring WebApp](https://orgofferingappservice.azurewebsites.net/)
+[OrgOfferring WebApp](https://orgofferingappservice.azurewebsites.net/) - (Database offline)
 
 ## UserGuide
 
